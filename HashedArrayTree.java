@@ -1,39 +1,33 @@
 package com.company;
 
-import sun.util.PreHashedMap;
-
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.*;
 
 /**
  * Created by 1 on 21.05.2015.
  */
 
-public class HashedArrayTree<E> implements List<E> {
-    public int currentSize;
+public class HashedArrayTree<E> extends AbstractList<E>
+implements List<E> {
+    private int currentSize;
     private int capacity;
     private int sideLength;
     private int sideD2;
     private E[][] data;
 
-    public HashedArrayTree(int n) {
-        sideD2 = n;
-        n = 1 << n;
-        data = (E[][])new Object[n][n];
+    public HashedArrayTree(int cap) {
+        sideD2 = 0;
+        while ((1 << (2 * sideD2)) < cap)
+            sideD2++;
+        int n = 1 << sideD2;
+        //noinspection unchecked
+        data = (E[][]) new Object[n][];
         capacity = n * n;
         sideLength = n;
         currentSize = 0;
     }
 
     public HashedArrayTree() {
-        sideD2 = 0;
-        int n = 1;
-        data = (E[][])new Object[n][n];
-        capacity = n * n;
-        sideLength = n;
-        currentSize = 0;
+        this(1);
     }
 
     @Override
@@ -48,10 +42,17 @@ public class HashedArrayTree<E> implements List<E> {
 
     @Override
     public boolean contains(Object o) {
-        Iterator<E> it = this.iterator();
-        while(it.hasNext()) {
-            if (it.next().equals(o))
-                return true;
+        if (o == null) {
+            for (E e : this) {
+                if (e == null)
+                    return true;
+            }
+            return false;
+        } else {
+            for (E e : this) {
+                if (e.equals(o))
+                    return true;
+            }
         }
         return false;
     }
@@ -72,6 +73,10 @@ public class HashedArrayTree<E> implements List<E> {
             cursor++;
             return res;
         }
+
+        public void remove() {
+
+        }
     }
 
     @Override
@@ -82,10 +87,9 @@ public class HashedArrayTree<E> implements List<E> {
     @Override
     public Object[] toArray() {
         Object[] res = new Object[currentSize];
-        Iterator<E> it = this.iterator();
         int ft = 0;
-        while(it.hasNext()) {
-            res[ft++] = it.next();
+        for (E e : this) {
+            res[ft++] = e;
         }
         return res;
     }
@@ -94,55 +98,78 @@ public class HashedArrayTree<E> implements List<E> {
     public <T> T[] toArray(T[] a) {
         Iterator<E> it = this.iterator();
         int ft = 0;
-        while(it.hasNext()) {
-            a[ft++] = (T)it.next();
+        for (E e : this) {
+            a[ft++] = (T)e;
         }
         return a;
     }
 
-    public void resize(int newSize) {
-        if (newSize > capacity) {
-            for (int side = sideD2 + 1; ; ++side) {
-                if ((1 << (side + side)) > newSize) {
-                    E[][] pastData = data;
-                    data = (E[][])new Object[1 << side][1 << side];
-                    for (int i = 0; i < currentSize; ++i)
-                        data[i >> side][i & ((1 << side) - 1)] = pastData[i >> sideD2][ i & (sideLength - 1)];
-                    this.sideLength = 1 << side;
-                    this.sideD2 = side;
-                    this.capacity = sideLength * sideLength;
-                    this.currentSize = newSize;
-                    return;
-                }
+    private void addLeaf() {
+        data[currentSize >> sideD2] = (E[])new Object[sideLength];
+    }
+
+    public void resize() {
+        HashedArrayTree<E> t = new HashedArrayTree<E>(capacity * 4);
+        for (int i = 0; i < sideLength; i += 2) {
+            t.addLeaf();
+            System.arraycopy(data[i], 0, t.data[i >> 1], 0, sideLength);
+            t.currentSize += sideLength;
+            data[i] = null;
+            if ((i + 1) * sideLength < currentSize) {
+                System.arraycopy(data[i + 1], 0, t.data[i >> 1], sideLength, sideLength);
+                data[i + 1] = null;
+                t.currentSize += sideLength;
             }
-        } else {
-            currentSize = newSize;
         }
+        this.data = t.data;
+        this.capacity = t.capacity;
+        this.sideD2 = t.sideD2;
+        this.sideLength = t.sideLength;
     }
 
     @Override
     public boolean add(E e) {
-        resize(currentSize + 1);
-        data[(currentSize - 1) >> sideD2][(currentSize - 1) & (sideLength - 1)] = e;
+        if ((currentSize & (sideLength - 1)) == 0) {
+            if (currentSize != capacity) {
+                addLeaf();
+            } else {
+                resize();
+                if ((currentSize & (sideLength - 1)) == 0)
+                    addLeaf();
+            }
+        }
+        data[(currentSize) >> sideD2][(currentSize) & (sideLength - 1)] = e;
+        currentSize++;
         return true;
     }
 
     @Override
     public boolean remove(Object o) {
-        for (int i = 0; i < currentSize; ++i)
-            if (get(i).equals(o)) {
-                for (int j = i + 1; j < currentSize; ++j)
-                    set(j - 1, get(j));
-                currentSize--;
-                return true;
+        int idx = 0;
+        if (o == null) {
+            for (E e : this) {
+                if (e == null) {
+                    remove(idx);
+                    return true;
+                }
+                idx++;
             }
+        }   else {
+            for (E e : this) {
+                if (e.equals(o)) {
+                    remove(idx);
+                    return true;
+                }
+                idx++;
+            }
+        }
         return false;
     }
 
     @Override
     public boolean containsAll(Collection<?> c) {
-        Iterator<E> it = (Iterator<E>)c.iterator();
-        while(it.hasNext()) {
+        Iterator<E> it = (Iterator<E>) c.iterator();
+        while (it.hasNext()) {
             if (!contains(it.next()))
                 return false;
         }
@@ -152,23 +179,13 @@ public class HashedArrayTree<E> implements List<E> {
     @Override
     public boolean addAll(Collection<? extends E> c) {
         Iterator<E> it = (Iterator<E>) c.iterator();
-        while(it.hasNext())
+        while (it.hasNext())
             add(it.next());
         return false;
     }
 
     @Override
     public boolean addAll(int index, Collection<? extends E> c) {
-        int r = currentSize;
-        resize(currentSize + c.size());
-        for (int i = r; i >= index; --i) {
-            set(i + c.size(), get(i));
-        }
-
-        Iterator<E> it = (Iterator<E>) c.iterator();
-        while(it.hasNext())
-            set(index++, it.next());
-
         return false;
     }
 
@@ -176,7 +193,7 @@ public class HashedArrayTree<E> implements List<E> {
     public boolean removeAll(Collection<?> c) {
         boolean res = false;
         Iterator<E> it = (Iterator<E>) c.iterator();
-        while(it.hasNext())
+        while (it.hasNext())
             res |= remove(it.next());
         return res;
     }
@@ -185,7 +202,7 @@ public class HashedArrayTree<E> implements List<E> {
     public void clear() {
         sideD2 = 0;
         int n = 1;
-        data = (E[][])new Object[n][n];
+        data = (E[][]) new Object[n][n];
         capacity = n * n;
         sideLength = n;
         currentSize = 0;
@@ -205,27 +222,50 @@ public class HashedArrayTree<E> implements List<E> {
 
     @Override
     public void add(int index, E element) {
-        resize(currentSize + 1);
-        for (int i = currentSize - 1; i >= index; --i) {
-            set(i + 1, get(i));
-        }
-        set(index, element);
+        return;
     }
 
     @Override
     public E remove(int index) {
-        E res = get(index);
-        for (int i = index; i < currentSize - 1; ++i)
-            set(i, get(i + 1));
-        currentSize--;
-        return res;
+        E oldValue = get(index);
+
+        int numMoved = currentSize - index - 1;
+        if (numMoved > 0) {
+            int x = index >> sideD2;
+            int y = index & (sideLength - 1);
+            while(true) {
+                numMoved = sideLength - y - 1;
+                System.arraycopy(data[x], y + 1, data[x], index, numMoved);
+                x++;
+                y = 0;
+                if ((x << sideD2) < currentSize) {
+                    data[x - 1][sideLength - 1] = data[x][0];
+                } else {
+                    break;
+                }
+            }
+        }
+        set(currentSize--, null);
+
+        return oldValue;
     }
 
     @Override
     public int indexOf(Object o) {
-        for (int i = 0; i < currentSize; ++i)
-            if (get(i).equals(o))
-                return i;
+        int pos = 0;
+        if (o == null) {
+            for (E e : this) {
+                if (e == null)
+                    return pos;
+                pos++;
+            }
+        }   else {
+           for (E e : this) {
+               if (e.equals(o))
+                   return pos;
+               pos++;
+           }
+        }
         return -1;
     }
 
